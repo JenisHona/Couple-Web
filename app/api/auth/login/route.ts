@@ -21,7 +21,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const token = generateToken(user.id, user.username);
+    const token = generateToken(user.id, user.username, user.email);
 
     const response = NextResponse.json({ 
       user: {
@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
+      path: '/',
       maxAge: 60 * 60 * 24 * 30,
     });
 

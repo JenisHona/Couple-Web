@@ -1,48 +1,33 @@
-import type { Metadata } from 'next'
-import { Geist, Geist_Mono } from 'next/font/google'
-import { Analytics } from '@vercel/analytics/next'
-import { AuthProvider } from '@/lib/auth-context'
-import './globals.css'
-
-const _geist = Geist({ subsets: ["latin"] });
-const _geistMono = Geist_Mono({ subsets: ["latin"] });
+import type { Metadata } from 'next';
+import { AuthProvider } from '@/lib/auth-context';
+import { RealtimeProvider } from '@/lib/realtime-context';
+import { ThemeProvider } from '@/components/theme-provider';
+import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'Our Love Story',
-  description: 'A sacred space for our couple to share memories, dreams, and love',
-  generator: 'v0.app',
+  title: 'Duo Diary | Couples Sanctuary & Journal',
+  description: 'A private and sacred glassy sanctuary to cherish our journey, letters, bucket list, and memories.',
   icons: {
-    icon: [
-      {
-        url: '/icon-light-32x32.png',
-        media: '(prefers-color-scheme: light)',
-      },
-      {
-        url: '/icon-dark-32x32.png',
-        media: '(prefers-color-scheme: dark)',
-      },
-      {
-        url: '/icon.svg',
-        type: 'image/svg+xml',
-      },
-    ],
-    apple: '/apple-icon.png',
+    icon: '/icon.svg',
   },
-}
+};
 
 export default function RootLayout({
   children,
 }: Readonly<{
-  children: React.ReactNode
+  children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
-      <body className="font-sans antialiased">
-        <AuthProvider>
-          {children}
-        </AuthProvider>
-        <Analytics />
+    <html lang="en" suppressHydrationWarning>
+      <body className="font-sans antialiased bg-romantic-mesh text-foreground min-h-screen">
+        <ThemeProvider attribute="class" defaultTheme="system" enableSystem disableTransitionOnChange>
+          <AuthProvider>
+            <RealtimeProvider>
+              {children}
+            </RealtimeProvider>
+          </AuthProvider>
+        </ThemeProvider>
       </body>
     </html>
-  )
+  );
 }

@@ -1,60 +1,73 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { verifyToken } from '@/lib/auth';
+import { getUserFromRequest, getCoupleUserIds } from '@/lib/auth';
 import { executeQuery } from '@/lib/db';
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     if (!process.env.DATABASE_URL) {
       return NextResponse.json({ posts: [] });
     }
 
-    const result = await executeQuery(
-      `SELECT bp.id, bp.title, bp.content, bp.images, bp.created_at, 
-              u.username as author 
-       FROM blog_posts bp 
-       JOIN users u ON bp.user_id = u.id 
-       ORDER BY bp.created_at DESC LIMIT 50`
-    );
+    const user = getUserFromRequest(request);
+    let coupleIds: number[] = [];
+    if (user) {
+      coupleIds = await getCoupleUserIds(user.userId);
+    }
 
-    return NextResponse.json({ posts: result });
+    let query = `
+      SELECT bp.id, bp.title, bp.content, bp.images, bp.created_at, bp.updated_at,
+             bp.user_id, COALESCE(u.username, 'Anonymous') as author 
+      FROM blog_posts bp 
+      LEFT JOIN users u ON bp.user_id = u.id 
+    `;
+    let params: any[] = [];
+
+    if (coupleIds.length > 0) {
+      query += ` WHERE bp.user_id = ANY($1::int[]) `;
+      params.push(coupleIds);
+    }
+
+    query += ` ORDER BY bp.created_at DESC `;
+
+    const result: any = await executeQuery(query, params);
+    return NextResponse.json({ posts: result || [] });
   } catch (error) {
     console.error('Blog fetch error:', error);
-    return NextResponse.json({ posts: [] });
+    return NextResponse.json({ posts: [] }, { status: 500 });
   }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const token = request.cookies.get('auth-token')?.value;
-    if (!token) {
-      return NextResponse.json({ error: 'Not authenticated' }, { status: 401 });
-    }
-
-    const payload = verifyToken(token);
-    if (!payload) {
-      return NextResponse.json({ error: 'Invalid token' }, { status: 401 });
-    }
-
-    if (!process.env.DATABASE_URL) {
-      return NextResponse.json({ error: 'Database not configured' }, { status: 503 });
+    const user = getUserFromRequest(request);
+    if (!user) {
+      return NextResponse.json({ error: 'Please sign in to write a blog post' }, { status: 401 });
     }
 
     const { title, content, images } = await request.json();
 
-    if (!title || !content) {
+    if (!title?.trim() || !content?.trim()) {
       return NextResponse.json({ error: 'Title and content are required' }, { status: 400 });
     }
 
-    const result = await executeQuery(
+    const imagesArray = Array.isArray(images) ? images : [];
+
+    const result: any = await executeQuery(
       `INSERT INTO blog_posts (user_id, title, content, images) 
        VALUES ($1, $2, $3, $4) 
-       RETURNING id, title, content, images, created_at`,
-      [payload.userId, title, content, images || null]
+       RETURNING id, title, content, images, created_at, updated_at`,
+      [Number(user.userId), title.trim(), content.trim(), imagesArray]
     );
 
-    return NextResponse.json({ post: result[0] }, { status: 201 });
-  } catch (error) {
+    const post = {
+      ...result[0],
+      author: user.username,
+      user_id: Number(user.userId),
+    };
+
+    return NextResponse.json({ post }, { status: 201 });
+  } catch (error: any) {
     console.error('Blog create error:', error);
-    return NextResponse.json({ error: 'Failed to create post' }, { status: 500 });
+    return NextResponse.json({ error: error.message || 'Failed to create post' }, { status: 500 });
   }
 }
